@@ -17,7 +17,6 @@ class ID3:
         self.api = API()
         subset = self.api.get_target_set()
         self.root_node = self.ID3(Node('root'), subset)
-        self.clean_tree()
 
     @staticmethod
     def get_subset_count(subset):
