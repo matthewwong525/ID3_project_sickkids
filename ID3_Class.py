@@ -16,6 +16,10 @@ class ID3:
         """
         self.api = API()
         subset = self.api.get_target_set()
+        #print subset
+        #print "\n\n\n\n"
+        #print self.api.split_subset(split_var="16050654,A,[<CN0>, <CN2>, <CN3>, <CN4>]")[2]
+        #print ["%s : %s" %j (sum(varz.values()), self.api.variant_name_list[idx]) for idx, varz in enumerate(self.api.split_subset(split_var="16050654,A,[<CN0>, <CN2>, <CN3>, <CN4>]")[2])]
         self.root_node = self.ID3(Node('root'), subset)
 
     @staticmethod
@@ -97,8 +101,8 @@ class ID3:
         attr_list = set()
         upd_var_count = { k : v for k, v in subset.items() if v != 0 }
         attr_list.update(upd_var_count.keys())
-        if len(attr_list) == 1 or len(split_path[0]) >= len(self.api.variant_name_list) or split_index is None:
-        #if len(attr_list) == 1 or len(split_path[0]) >= 1 or split_index is None or ID3.entropy_by_count(subset) == 0:
+        #if len(attr_list) == 1 or len(split_path[0]) >= len(self.api.variant_name_list) or split_index is None or ID3.entropy_by_count(subset) == 0:
+        if len(attr_list) == 1 or len(split_path[0]) >= 5 or split_index is None or ID3.entropy_by_count(subset) == 0:
             return True
         return False
 
@@ -134,15 +138,14 @@ class ID3:
         # loops through all the counts for each variant
         for idx, w_var_counts in enumerate(variant_list):
             wo_var_counts = { k : subset.get(k, 0) - w_var_counts.get(k, 0) for k in subset.keys() + w_var_counts.keys() }
-            info_gain = ID3.entropy_by_count(subset)
+
             # calculates info gain
-            for popu in w_var_counts.keys():
-                info_gain -= wo_var_counts[popu] / total_count * ID3.entropy_by_count(w_var_counts)
+            info_gain = ID3.entropy_by_count(subset) - ( sum(wo_var_counts.values()) / total_count * ID3.entropy_by_count(wo_var_counts) + sum(w_var_counts.values()) / total_count * ID3.entropy_by_count(w_var_counts) )
             # finds max info gain and checks if the index is not in excluded variants list
             if final_info_gain < info_gain and idx not in var_idx_list:
                 final_info_gain = info_gain
                 ret_index = idx
-            #print str(info_gain) + " : " + self.api.variant_name_list[idx]
+
         return ret_index
 
     # note: variant list must be same length as count list

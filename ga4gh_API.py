@@ -167,5 +167,19 @@ class API:
             counts[i] = counts.get(i, 0) + 1
         return counts
 
+    def count_variants(self):
+        my_dict = {}
+        for variants in (self.variant_list):
+            count = 0
+            for idx, variant in enumerate(variants):
+                if variant is 1:
+                    my_dict[self.variant_name_list[idx]] = my_dict.get(self.variant_name_list[idx], 0) + 1
+        return my_dict
+
+if __name__ == "__main__":
+    api = API()
+    print api.count_variants()
+
+
 
 
