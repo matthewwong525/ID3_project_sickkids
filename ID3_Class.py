@@ -16,10 +16,6 @@ class ID3:
         """
         self.api = API()
         subset = self.api.get_target_set()
-        #print subset
-        #print "\n\n\n\n"
-        #print self.api.split_subset(split_var="16050654,A,[<CN0>, <CN2>, <CN3>, <CN4>]")[2]
-        #print ["%s : %s" %j (sum(varz.values()), self.api.variant_name_list[idx]) for idx, varz in enumerate(self.api.split_subset(split_var="16050654,A,[<CN0>, <CN2>, <CN3>, <CN4>]")[2])]
         self.root_node = self.ID3(Node('root'), subset)
 
     @staticmethod
@@ -101,8 +97,8 @@ class ID3:
         attr_list = set()
         upd_var_count = { k : v for k, v in subset.items() if v != 0 }
         attr_list.update(upd_var_count.keys())
-        #if len(attr_list) == 1 or len(split_path[0]) >= len(self.api.variant_name_list) or split_index is None or ID3.entropy_by_count(subset) == 0:
-        if len(attr_list) == 1 or len(split_path[0]) >= 5 or split_index is None or ID3.entropy_by_count(subset) == 0:
+        if len(attr_list) == 1 or len(split_path[0]) >= len(self.api.variant_name_list) or split_index is None or ID3.entropy_by_count(subset) == 0:
+        #if len(attr_list) == 1 or len(split_path[0]) >= 4 or split_index is None or ID3.entropy_by_count(subset) == 0:
             return True
         return False
 
@@ -146,6 +142,9 @@ class ID3:
                 final_info_gain = info_gain
                 ret_index = idx
 
+        # checks if there is any info gain
+        if final_info_gain <= 1.e-8:
+            return None
         return ret_index
 
     # note: variant list must be same length as count list

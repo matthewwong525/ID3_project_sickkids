@@ -178,7 +178,7 @@ class API:
 
 if __name__ == "__main__":
     api = API()
-    print api.count_variants()
+    print api.variant_name_list
 
 
 
