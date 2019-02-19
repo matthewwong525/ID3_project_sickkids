@@ -1,22 +1,28 @@
 from __future__ import division
 import math
-from anytree import Node, RenderTree, LevelOrderIter
+from anytree import Node, RenderTree, Walker
 from anytree.exporter import DotExporter
 from ga4gh_API import API
+from ID3_Node import ID3_Node
+from ConfusionMatrix import ConfusionMatrix
 
 class ID3:
 
-    def __init__(self):
+    def __init__(self, file_path, conf_matrix=False):
         """
         Initializes the ID3 class
 
         Attributes:
         api (API): API object that is used to interact with the virtual API
         root_node (Node): Creates the root node of the tree to be added upon
+        file_path (str): Path to json file that contains the variant rangess
         """
-        self.api = API()
+        
+        self.api = API(file_path, conf_matrix)
         subset = self.api.get_target_set()
-        self.root_node = self.ID3(Node('root'), subset)
+        self.root_node = ID3_Node('root', subset, True)
+        self.ID3(self.root_node)
+
 
     @staticmethod
     def get_subset_count(subset):
@@ -75,6 +81,30 @@ class ID3:
 
         return w_split_path, wo_split_path
 
+    def predict(self, include_variants):
+        """
+        Traverses the tree and finds the leaf node corresponding to the list of included variants
+        as the input
+
+        Args:
+            include_variants (list):  list of variants that are included in the particular person
+
+        Returns:
+            node (ID3_Node): Custom object that has information about the leaf node
+        """
+        node = self.root_node
+        # finds leaf node 
+        while node.children:
+            for child_node in node.children:
+                # walk in in the path with the variant
+                if child_node.variant_name in include_variants and child_node.with_variant:
+                    node = child_node
+                # walk in the path without the variant
+                elif not child_node.variant_name in include_variants and not child_node.with_variant:
+                    node = child_node
+
+        return node
+
 
     def is_leaf_node(self, subset, split_path, split_index):
         """
@@ -89,8 +119,14 @@ class ID3:
                 and 0's. Where 1 is splitting in the direction with the variant
                 and 0 is splitting in the direction without the variant. 
             split_index (int): the index for the next split to be split on
+
         Returns:
             Boolean Value: the boolean value represents whether or not the node is a leaf node
+
+        TODO:
+            * Clean up leaf node if statement and ensure it is still valid
+            * See why entropy by count == 0 doesn't do much
+
 
         """
         # check if all variants are of one ancestry (Essentially if all remaining variants(attributes) contains one region(value))
@@ -98,12 +134,12 @@ class ID3:
         upd_var_count = { k : v for k, v in subset.items() if v != 0 }
         attr_list.update(upd_var_count.keys())
         if len(attr_list) == 1 or len(split_path[0]) >= len(self.api.variant_name_list) or split_index is None or ID3.entropy_by_count(subset) == 0:
-        #if len(attr_list) == 1 or len(split_path[0]) >= 4 or split_index is None or ID3.entropy_by_count(subset) == 0:
+        #if len(attr_list) == 1 or len(split_path[0]) >= 5 or split_index is None or ID3.entropy_by_count(subset) == 0:
             return True
         return False
 
     def print_tree(self, file_name):
-        DotExporter(self.root_node).to_picture("%s.png" % file_name)
+        DotExporter(self.root_node, nodenamefunc=ID3_Node.name_func).to_picture("%s.png" % file_name)
 
     def find_variant_split(self, subset, split_path):
         """
@@ -121,7 +157,9 @@ class ID3:
 
         Returns:
             ret_index: index that yields the greatest information gain
+
         """
+
         variant_list = self.api.split_subset(split_path)[2]
         total_count = sum(subset.values())
         ret_index = 0
@@ -141,14 +179,13 @@ class ID3:
             if final_info_gain < info_gain and idx not in var_idx_list:
                 final_info_gain = info_gain
                 ret_index = idx
-
         # checks if there is any info gain
         if final_info_gain <= 1.e-8:
             return None
         return ret_index
 
     # note: variant list must be same length as count list
-    def ID3(self, node, subset, split_path=([], [])):
+    def ID3(self, node, split_path=([], [])):
         """
         A recursive function that creates a tree given the root node and a subset
 
@@ -165,10 +202,11 @@ class ID3:
                 and 0 is splitting in the direction without the variant. 
 
         TODO:
-            * Delete the extra nodes in the tree where the tree doesn't split
+            * Clean up if statements that check if the subset values are greater than 0 (should be taken care of in leaf node calc)
 
         """
         # find the attrivute to split on and adds that variant to exclude variant list
+        subset = node.subset
         split_index = self.find_variant_split(subset, split_path)
         if not self.is_leaf_node(subset, split_path, split_index):
             var_name = self.api.variant_name_list[split_index]
@@ -179,11 +217,18 @@ class ID3:
 
 
             if sum(w_subset.values()) > 0:
-                self.ID3(Node("with:%s\n%s" % (var_name, ID3.get_subset_count(w_subset)), parent=node), dict(w_subset), w_split_path)
+                self.ID3(ID3_Node(var_name, dict(w_subset), True, parent=node), w_split_path)
             if sum(wo_subset.values()) > 0:
-                self.ID3(Node("without:%s\n%s" % (var_name, ID3.get_subset_count(wo_subset)), parent=node), dict(wo_subset), wo_split_path)
+                self.ID3(ID3_Node(var_name, dict(wo_subset), False, parent=node), wo_split_path)
             return node
 
 if __name__ == "__main__":
-    id3_alg = ID3()
+    id3_alg = ID3('variant_ranges.json', True)
     id3_alg.print_tree('udo1')
+    print id3_alg.api.ancestry_list
+    ConfusionMatrix(id3_alg).print_matrix()
+    print ConfusionMatrix(id3_alg).accuracy()
+    print ConfusionMatrix(id3_alg).prevalance('ESN')
+
+
+    #print id3_alg.api.test_variant_list

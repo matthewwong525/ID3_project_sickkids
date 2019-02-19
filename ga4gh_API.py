@@ -1,7 +1,8 @@
 import vcf
+import json
 
 class API:
-    def __init__(self):
+    def __init__(self, file_path, conf_matrix=False):
         """
         Initializes the API class
 
@@ -15,10 +16,10 @@ class API:
                                      1's indicating if the variant exists in the person.
             api_indiv_list (list): Represents the individual code of a person
             api_popu_list (list): Represents the ancestry of the person
-            api_variant_name_list (list): All the variant names queried
             api_variant_name_list (list): Names of the variants in the format of
                                           "VARIANT_POS,VARIANT_REF,VARIANT_ALT"
             ancestry_dict (dict): a dictionary which maps indivdual ID to population
+            file_path (str): Path to json file that contains the variant rangess
 
         TODO:
             * Add option to query for different variants rather than grabbing a predefined set of variants
@@ -26,16 +27,34 @@ class API:
         self.variant_list = []
         self.indiv_list = []
         self.popu_list = []
+
+        self.test_popu_list = []
+        self.test_variant_list = []
+
         self.variant_name_list = []
         self.ancestry_dict = {}
+        self.ancestry_list = []
+
+        self.is_conf_matrix = conf_matrix
 
         # fetch variants from vcf and create a dictionary
-        vcf_reader = vcf.Reader(open('chr22.vcf', 'r'))
-        variants = vcf_reader.fetch('22', 16050074, 16050075+150000)
+        variants = API.fetch_variants(file_path)
         variant_dict = self.create_variant_dict(variants)
 
         # updates variables
         self.read_user_mappings(variant_dict)
+
+    @staticmethod
+    def fetch_variants(file_path):
+        variant_list = []
+        with open(file_path) as f:
+            data = json.load(f)
+        for var_range in data:
+            vcf_path = "../1000g/ALL.%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % var_range['chr']
+            vcf_reader = vcf.Reader(open(vcf_path, 'r'))
+            variants = vcf_reader.fetch(str(var_range['chr']).replace('chr',''), int(var_range['start']), int(var_range['end']))
+            variant_list.extend([variant for variant in variants])
+        return variant_list
 
     def create_variant_dict(self, variants):
         """
@@ -87,6 +106,14 @@ class API:
                     self.popu_list.append(population)
                     self.variant_list.append(variant_dict[indiv_id])
 
+        self.ancestry_list = list(set(self.ancestry_dict.values()))
+
+        if self.is_conf_matrix:
+            self.test_variant_list = list(self.variant_list[1::2])
+            self.test_popu_list = list(self.popu_list[1::2])
+            self.variant_list = self.variant_list[::2]
+            self.popu_list = self.popu_list[::2]
+
 
     # splits the set given a variant 
     # returns 2 subsets of the data
@@ -118,7 +145,7 @@ class API:
 
         """
         # retrieves variant from "API"
-        ancestry_list = set(self.ancestry_dict.values())
+        ancestry_list = self.ancestry_list
         w_variant_list = [dict.fromkeys(ancestry_list, 0) for variant_names in self.variant_name_list]
         wo_variant_list = [dict.fromkeys(ancestry_list, 0) for variant_names in self.variant_name_list]
         w_variant_dict = dict.fromkeys(ancestry_list, 0)
@@ -126,6 +153,7 @@ class API:
 
         ignore_rows_idxs = []
 
+        #print split_paths
         # basically find rows to ignore because it has been split upon already
         for exc_var, direction in zip(split_paths[0], split_paths[1]):
             # finding rows to ignore
@@ -161,13 +189,16 @@ class API:
         Returns:
             counts (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
         """
-        ancestry_list = set(self.ancestry_dict.values())
+        ancestry_list = self.ancestry_list
         counts = dict.fromkeys(ancestry_list, 0)
         for i in self.popu_list:
             counts[i] = counts.get(i, 0) + 1
         return counts
 
     def count_variants(self):
+        """
+        Gets the counts of each variant
+        """
         my_dict = {}
         for variants in (self.variant_list):
             count = 0
@@ -177,7 +208,7 @@ class API:
         return my_dict
 
 if __name__ == "__main__":
-    api = API()
+    api = API('variant_ranges.json')
     print api.variant_name_list
 
 
