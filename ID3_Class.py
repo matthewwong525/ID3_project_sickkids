@@ -1,24 +1,27 @@
 from __future__ import division
 import math
-from anytree import Node, RenderTree, Walker
+from anytree import Node, RenderTree
 from anytree.exporter import DotExporter
-from ga4gh_API import API
+from local_API import LOCAL_API
+from ga4gh_API import GA4GH_API
 from ID3_Node import ID3_Node
-from ConfusionMatrix import ConfusionMatrix
 
 class ID3:
 
-    def __init__(self, file_path, conf_matrix=False):
+    def __init__(self, file_path, local=True):
         """
         Initializes the ID3 class
 
+        Args:
+            file_path (str): Path to json file that contains the variant ranges
+            local (bool): flag to determine whether or not to read locally or from a server
+
         Attributes:
-        api (API): API object that is used to interact with the virtual API
-        root_node (Node): Creates the root node of the tree to be added upon
-        file_path (str): Path to json file that contains the variant rangess
+            api (API): API object that is used to interact with the virtual API
+            root_node (Node): Creates the root node of the tree to be added upon
         """
         
-        self.api = API(file_path, conf_matrix)
+        self.api = LOCAL_API(file_path) if local else GA4GH_API(file_path)
         subset = self.api.get_target_set()
         self.root_node = ID3_Node('root', subset, True)
         self.ID3(self.root_node)
@@ -65,7 +68,13 @@ class ID3:
         Creates two new split paths given the variant name and the split path
 
         Args:
-            subset (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
+            split_paths (list1, list2): 
+                This is the paths of the splits before the current split. The first list
+                is the list of variant names and the second list is the direction
+                of the split. The direction of the second list is depicted by 1's
+                and 0's. Where 1 is splitting in the direction with the variant
+                and 0 is splitting in the direction without the variant. 
+            new_variant_name (str): unique id of variant
 
         Returns:
             w_split_path: The split path with the variant
@@ -121,7 +130,7 @@ class ID3:
             split_index (int): the index for the next split to be split on
 
         Returns:
-            Boolean Value: the boolean value represents whether or not the node is a leaf node
+            (bool): the boolean value represents whether or not the node is a leaf node
 
         TODO:
             * Clean up leaf node if statement and ensure it is still valid
@@ -156,11 +165,11 @@ class ID3:
                 and 0 is splitting in the direction without the variant. 
 
         Returns:
-            ret_index: index that yields the greatest information gain
+            ret_index (int): index that yields the greatest information gain
 
         """
 
-        variant_list = self.api.split_subset(split_path)[2]
+        variant_list = self.api.find_next_variant_counts(split_path)
         total_count = sum(subset.values())
         ret_index = 0
         final_info_gain = 0
@@ -185,7 +194,7 @@ class ID3:
         return ret_index
 
     # note: variant list must be same length as count list
-    def ID3(self, node, split_path=([], [])):
+    def ID3(self, node):
         """
         A recursive function that creates a tree given the root node and a subset
 
@@ -193,7 +202,6 @@ class ID3:
 
         Args:
             node (Node): A node object from the anytree library
-            subset (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
             split_paths (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
@@ -207,28 +215,26 @@ class ID3:
         """
         # find the attrivute to split on and adds that variant to exclude variant list
         subset = node.subset
-        split_index = self.find_variant_split(subset, split_path)
-        if not self.is_leaf_node(subset, split_path, split_index):
+        split_index = self.find_variant_split(subset, node.split_path)
+        if not self.is_leaf_node(subset, node.split_path, split_index):
             var_name = self.api.variant_name_list[split_index]
-            
-            w_subset, wo_subset = self.api.split_subset(split_path, var_name)[:2]
 
-            w_split_path, wo_split_path = ID3.create_split_path(split_path, var_name)
+            w_subset, wo_subset = self.api.split_subset(node, var_name)
+
+            w_split_path, wo_split_path = ID3.create_split_path(node.split_path, var_name)
 
 
             if sum(w_subset.values()) > 0:
-                self.ID3(ID3_Node(var_name, dict(w_subset), True, parent=node), w_split_path)
+                self.ID3(ID3_Node(var_name, dict(w_subset), with_variant=True, split_path=w_split_path, parent=node))
             if sum(wo_subset.values()) > 0:
-                self.ID3(ID3_Node(var_name, dict(wo_subset), False, parent=node), wo_split_path)
-            return node
+                self.ID3(ID3_Node(var_name, dict(wo_subset), with_variant=False, split_path=wo_split_path, parent=node))
 
 if __name__ == "__main__":
-    id3_alg = ID3('variant_ranges.json', True)
+    id3_alg = ID3('test_variant_ranges.json', local=True)
+    print id3_alg.api.variant_name_list
     id3_alg.print_tree('udo1')
-    print id3_alg.api.ancestry_list
-    ConfusionMatrix(id3_alg).print_matrix()
-    print ConfusionMatrix(id3_alg).accuracy()
-    print ConfusionMatrix(id3_alg).prevalance('ESN')
+    #print id3_alg.api.ancestry_list
+    #print id3_alg.api.variant_name_list
 
 
     #print id3_alg.api.test_variant_list

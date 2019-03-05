@@ -1,7 +1,7 @@
 from anytree import NodeMixin
 
 class ID3_Node(NodeMixin):
-    def __init__(self, variant_name, subset, with_variant, parent=None, children=None):
+    def __init__(self, variant_name, subset, with_variant, split_path=([], []), parent=None, children=None):
         super(ID3_Node, self).__init__()
         self.variant_name = variant_name
         self.with_variant = with_variant
@@ -9,6 +9,7 @@ class ID3_Node(NodeMixin):
         self.total_count = str(sum(subset.values()))
         self.most_common_ancestry = str(max(subset, key=subset.get))
         self.parent = parent
+        self.split_path = split_path
         if children:
             self.children = children
 

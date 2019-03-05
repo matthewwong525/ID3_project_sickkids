@@ -1,123 +1,173 @@
-import vcf
 import json
+import requests
 
-class API:
+class GA4GH_API:
+    host_url = 'http://localhost:8000/'
     def __init__(self, file_path, conf_matrix=False):
         """
-        Initializes the API class
+        Initializes the GA4GH_API class
 
         NOTE:
             api_variant_list, api_indiv_list, and api_popu_list should be of the same
             length and every element in this list corresponds to a particular person
 
+        Args:
+            file_path (str): Path to json file that contains the variant ranges
+            conf_matrix (bool): Initializes API to perform conf_matrix operations
+
         Attributes:
-            api_variant_list (list): Represents the variants in each person. 
-                                     The value of the variants is a list of 0's and 
-                                     1's indicating if the variant exists in the person.
-            api_indiv_list (list): Represents the individual code of a person
-            api_popu_list (list): Represents the ancestry of the person
-            api_variant_name_list (list): Names of the variants in the format of
+            variant_name_list (list): Names of the variants in the format of
                                           "VARIANT_POS,VARIANT_REF,VARIANT_ALT"
-            ancestry_dict (dict): a dictionary which maps indivdual ID to population
-            file_path (str): Path to json file that contains the variant rangess
+                                          "CHROMOSOME_#:START_POS:END_POS" (TODO - UPDATE TO THIS)
+            ancestry_list (list): A unique list of all the ancestries of people
+            is_conf_matrix (bool): tells API to initialize the API for confusion matrix operations
 
         TODO:
             * Add option to query for different variants rather than grabbing a predefined set of variants
         """
-        self.variant_list = []
-        self.indiv_list = []
-        self.popu_list = []
-
-        self.test_popu_list = []
-        self.test_variant_list = []
-
-        self.variant_name_list = []
-        self.ancestry_dict = {}
+        self.dataset_id = 'WyIxa2dlbm9tZSJd'
+        self.variant_set_ids = GA4GH_API.get_variant_set_ids(self.dataset_id)[::10]
+        self.variant_name_list = self.fetch_variants(file_path)
+        self.is_conf_matrix = conf_matrix
         self.ancestry_list = []
 
-        self.is_conf_matrix = conf_matrix
-
-        # fetch variants from vcf and create a dictionary
-        variants = API.fetch_variants(file_path)
-        variant_dict = self.create_variant_dict(variants)
-
         # updates variables
-        self.read_user_mappings(variant_dict)
+        #self.read_user_mappings(variant_dict)
 
     @staticmethod
-    def fetch_variants(file_path):
+    def get_variant_set_ids(dataset_id):
+        req_body = { "dataset_id": dataset_id }
+        r = requests.post('%s%s' %  (GA4GH_API.host_url, 'variantsets/search'), json=req_body).json()
+        variant_set_ids = [ variantset['id'] for variantset in r['results']['variantSets'] ]
+        return variant_set_ids
+
+    def fetch_variants(self, file_path):
         variant_list = []
         with open(file_path) as f:
             data = json.load(f)
         for var_range in data:
-            vcf_path = "../1000g/ALL.%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % var_range['chr']
-            vcf_reader = vcf.Reader(open(vcf_path, 'r'))
-            variants = vcf_reader.fetch(str(var_range['chr']).replace('chr',''), int(var_range['start']), int(var_range['end']))
-            variant_list.extend([variant for variant in variants])
+            # TODO: queries for the variants within the range here:
+            chrom = str(var_range['chr']).replace('chr', '')
+            variant_list.extend(self.query_variants(chrom, str(var_range['start']), str(var_range['end'])))
         return variant_list
 
-    def create_variant_dict(self, variants):
+    def query_variants(self, chrom, start, end):
         """
-        Creates a ditionary of variants from a vcf file which is used to update variables
-        within this class
+        Queries the POS value of the individual variants within a range of variants.
+        Returns the variable variant_name_list to the variants found within
+        this range of variants.
 
         Args:
-            variants (Reader): A Reader Object from the PyVCF library which contains variants
+            chrom (str): chromosome number
+            start (str): starting position of variant
+            end (str): ending position of variant
+
+        Returns: 
+            variant_name_list (list): list of variant names formatted in the for of `CHR:POS`
+        """
+        variant_list = []
+        req_body = {
+            'variantSetIds' : self.variant_set_ids[:1],
+            'start': start,
+            'end': end,
+            'referenceName': chrom
+        }
+        r = requests.post('%s%s' %  (GA4GH_API.host_url, 'variants/search'), json=req_body).json()
+        for variant in r['results']['variants']:
+            variant_list.append(':'.join([chrom, variant['start'], variant['end']]))
+        return variant_list
+
+
+    def craft_api_request(self, split_paths=([], [])):
+        """
+        Crafts an GA4GH_API body to be sent to the ga4gh server which is intended to filter
+        the counts of the variants based on the inclusion or exclusion of particular
+        variants
+
+        Attributes:
+            split_paths (list1, list2): 
+                    This is the paths of the splits before the current split. The first list
+                    is the list of variant names and the second list is the direction
+                    of the split. The direction of the second list is depicted by 1's
+                    and 0's. Where 1 is splitting in the direction with the variant
+                    and 0 is splitting in the direction without the variant.
+            split_var (string): The variant name it is now splitting on
 
         Returns:
-            variant_dict (dict): A dictionary where the
-                                    key: is the individual ID
-                                    value: is a list of binary values where
-                                           (1 = variant exists, 0 = variant doesn't exist)
+            req_body (json): Returns a JSON containing the request body
+        TODO:
+            * Add NAND logic for filtering without a particular variant
         """
-        variant_dict = {}
-        variant_name_list = []
-        idx = 0
-        # loops through variants
-        for variant in variants:
-            idx += 1
-            self.variant_name_list.append(','.join([str(variant.POS), str(variant.REF), str(variant.ALT)]))
-            # loops through people in variants
-            for call in variant.samples:
-                variant_dict[call.sample] = variant_dict.get(call.sample, [])
-                # checks if variant exists in person
-                if call['GT'] == '0|0':
-                    variant_dict[call.sample].append(0)
-                else:
-                    variant_dict[call.sample].append(1)
-        return variant_dict
+        components = []
+        logic = { 'and': 
+            [ 
+                { 'or': [] },
+                { 'and': [] }
+            ] 
+        }
+        id_list = []
+        # Add to OR list
+        for variant_id in self.variant_name_list:
+            id_list.append( { 'id': variant_id } )
+            CHR, START, END = variant_id.split(':')
+            components.append(
+                {
+                    "id": variant_id,
+                    "variants":{
+                        "start": START,
+                        "end": END,
+                        "referenceName": CHR,
+                        "variant_set_ids": self.variant_set_ids
+                    }
+                })
+        logic['and'][0]['or'].extend(id_list)
 
-    def read_user_mappings(self, variant_dict):
+        for variant, direction in zip(split_paths[0], split_paths[1]):
+            # remove from OR
+            logic['and'][0]['or'] = [ variant_id for variant_id in logic['and'][0]['or'] if variant != variant_id['id']]
+            if not direction:
+                continue
+            # add to AND
+            logic['and'][1]['and'].append({"id": variant})
+
+        # Finds index with empty list and removes it
+        i = None
+        for idx, val in enumerate(logic['and']):
+            key = val.keys()[0]
+            if val[key] == []:
+                i = idx
+                break
+        if i: 
+            del logic['and'][i]
+
+        req_body = {}
+        req_body['logic'] = logic
+        req_body['components'] = components
+        req_body['dataset_id'] = self.dataset_id
+        req_body['results'] = [ {
+                    "table": "patients",
+                    "field": [
+                        "ethnicity"
+                    ]
+                } ]
+        req_body['page_size'] = 10000
+        return req_body          
+
+    def get_target_set(self):
         """
-        Reads the usermappings from a file and updates the variables in the class
+        Gets the target subset, which is the ancestry counts every variant
+
+        Returns:
+            counts (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
         """
-        with open('user_map.ped') as file:
-            next(file)
-            for line in file:
-                split_line = line.split('\t')
-                indiv_id = split_line[1]
-                population = split_line[6]
+        req =  self.craft_api_request()
+        ancestry_counts = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=req).json()['results']['patients'][0]['ethnicity']
+        if self.ancestry_list == []:
+            self.ancestry_list = ancestry_counts.keys()
 
-                self.ancestry_dict[indiv_id] = population
+        return ancestry_counts
 
-                # checks if variant individual is in the variant dict from the vcf file
-                if indiv_id in variant_dict:
-                    self.indiv_list.append(indiv_id)
-                    self.popu_list.append(population)
-                    self.variant_list.append(variant_dict[indiv_id])
-
-        self.ancestry_list = list(set(self.ancestry_dict.values()))
-
-        if self.is_conf_matrix:
-            self.test_variant_list = list(self.variant_list[1::2])
-            self.test_popu_list = list(self.popu_list[1::2])
-            self.variant_list = self.variant_list[::2]
-            self.popu_list = self.popu_list[::2]
-
-
-    # splits the set given a variant 
-    # returns 2 subsets of the data
-    def split_subset(self, split_paths=([], []), split_var=None):
+    def split_subset(self, node, split_var):
         """
         Splits the subset given the path of the splits before and a
         variable to split on.
@@ -134,6 +184,45 @@ class API:
         Returns:
             w_variant_dict (dict): The split subset that includes the variant
             wo_variant_dict (dict): The split subset that does not include the variant
+
+        """
+        wo_variant_split_path = list(node.split_path)
+        wo_variant_split_path.append((split_var, 0))
+        w_variant_split_path = list(node.split_path)
+        w_variant_split_path.append((split_var, 1))
+
+        w_var_req_body = self.craft_api_request(w_variant_split_path)
+        wo_var_req_body = self.craft_api_request(wo_variant_split_path)
+
+        # make query here for
+        r_w_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=w_var_req_body).json()['results']['patients'][0]['ethnicity']
+        r_wo_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=w_var_req_body).json()['results']['patients'][0]['ethnicity']
+
+        print("performed split")
+        print(r_w_var)
+        print(w_var_req_body)
+
+        print(r_wo_var)
+        print(wo_var_req_body)
+        print("")
+
+        return r_w_var, r_wo_var
+
+        # For w_variant list
+
+    def find_next_variant_counts(self, split_paths):
+        """
+        Finds the counts of the a potential next variant to perform the
+        split on
+
+        Attributes:
+            split_paths (list1, list2): 
+                This is the paths of the splits before the current split. The first list
+                is the list of variant names and the second list is the direction
+                of the split. The direction of the second list is depicted by 1's
+                and 0's. Where 1 is splitting in the direction with the variant
+                and 0 is splitting in the direction without the variant.
+        Returns:
             w_variant_list: 
                 A list representing of a dictionary of ancestry counts per variant
                 [
@@ -142,75 +231,28 @@ class API:
                     ..
                     .
                 ]
-
         """
-        # retrieves variant from "API"
-        ancestry_list = self.ancestry_list
-        w_variant_list = [dict.fromkeys(ancestry_list, 0) for variant_names in self.variant_name_list]
-        wo_variant_list = [dict.fromkeys(ancestry_list, 0) for variant_names in self.variant_name_list]
-        w_variant_dict = dict.fromkeys(ancestry_list, 0)
-        wo_variant_dict = dict.fromkeys(ancestry_list, 0)
+        w_variant_list = []
+        exclude_variants = [ variant for variant in split_paths[0] ]
+        include_variants = list(self.variant_name_list)
 
-        ignore_rows_idxs = []
+        for var in exclude_variants:
+            include_variants.remove(var)
 
-        #print split_paths
-        # basically find rows to ignore because it has been split upon already
-        for exc_var, direction in zip(split_paths[0], split_paths[1]):
-            # finding rows to ignore
-            var_idx = self.variant_name_list.index(exc_var)
-            # looping through all the people
-            for idx, variants in enumerate(self.variant_list):
-                if idx not in ignore_rows_idxs and variants[var_idx] is not direction:
-                    ignore_rows_idxs.append(idx)
+        for var in include_variants:
+            split_paths[0].append(var)
+            split_paths[1].append(1)
 
-        # create new subset after finding all the rows to ignore
-        for idx, variants in enumerate(self.variant_list):
-            if idx not in ignore_rows_idxs:
-                popu = self.popu_list[idx]
-                # check if split_var is null
-                if split_var:
-                    f_var_idx = self.variant_name_list.index(split_var)
-                    if variants[f_var_idx] is 1:
-                        w_variant_dict[popu] += 1
-                    else:
-                        wo_variant_dict[popu] += 1
-                # find counts of variants
-                for idx2, variant in enumerate(variants):
-                    if variant is 1: 
-                        w_variant_list[idx2][popu] += 1
+            req_body = self.craft_api_request(split_paths)
+            resp = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=req_body).json()
+            variant_counts = resp['results']['patients'][0]['ethnicity']
 
+            w_variant_list.append(variant_counts)
 
-        return w_variant_dict, wo_variant_dict, w_variant_list
+            del split_paths[0][-1]
+            del split_paths[1][-1]
 
-    def get_target_set(self):
-        """
-        Gets the target subset
-
-        Returns:
-            counts (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
-        """
-        ancestry_list = self.ancestry_list
-        counts = dict.fromkeys(ancestry_list, 0)
-        for i in self.popu_list:
-            counts[i] = counts.get(i, 0) + 1
-        return counts
-
-    def count_variants(self):
-        """
-        Gets the counts of each variant
-        """
-        my_dict = {}
-        for variants in (self.variant_list):
-            count = 0
-            for idx, variant in enumerate(variants):
-                if variant is 1:
-                    my_dict[self.variant_name_list[idx]] = my_dict.get(self.variant_name_list[idx], 0) + 1
-        return my_dict
-
-if __name__ == "__main__":
-    api = API('variant_ranges.json')
-    print api.variant_name_list
-
+        return w_variant_list
 
 
 
