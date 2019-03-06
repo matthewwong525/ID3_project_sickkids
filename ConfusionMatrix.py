@@ -6,7 +6,7 @@ from ID3_Node import ID3_Node
 
 class ConfusionMatrix(ID3):
 
-    def __init__(self, file_path):
+    def __init__(self, file_path='config.json'):
         '''
         Creates confusion matrix with the first index (Y) as the correct population and the
         second index (X) as the predicted population. THe order of the ancestries is dictated
@@ -143,7 +143,7 @@ class ConfusionMatrix(ID3):
             print row
 
 if __name__ == "__main__":
-    c = ConfusionMatrix('test_variant_ranges.json')
+    c = ConfusionMatrix()
     c.print_matrix()
     print c.accuracy()
     print c.prevalance('ESN')

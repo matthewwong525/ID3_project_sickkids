@@ -8,7 +8,7 @@ from ID3_Node import ID3_Node
 
 class ID3:
 
-    def __init__(self, file_path, local=True):
+    def __init__(self, file_path='config.json', local=True):
         """
         Initializes the ID3 class
 
@@ -204,7 +204,7 @@ class ID3:
                 self.ID3(ID3_Node(var_name, dict(wo_subset), with_variant=False, split_path=wo_split_path, parent=node))
 
 if __name__ == "__main__":
-    id3_alg = ID3('test_variant_ranges.json', local=False)
+    id3_alg = ID3('config.json', local=False)
     print id3_alg.api.variant_name_list
     id3_alg.print_tree('udo1')
     #print id3_alg.api.ancestry_list

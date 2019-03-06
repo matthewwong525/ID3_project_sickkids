@@ -28,6 +28,8 @@ class LOCAL_API:
             is_conf_matrix (bool): tells API to initialize the API for confusion matrix operations
 
         """
+        with open(file_path) as f:
+            self.config = json.load(f)
         self.variant_list = []
         self.indiv_list = []
         self.popu_list = []
@@ -42,14 +44,13 @@ class LOCAL_API:
         self.is_conf_matrix = conf_matrix
 
         # fetch variants from vcf and create a dictionary
-        variants = LOCAL_API.fetch_variants(file_path)
+        variants = self.fetch_variants()
         variant_dict = self.create_variant_dict(variants)
 
         # updates variables
         self.read_user_mappings(variant_dict)
 
-    @staticmethod
-    def fetch_variants(file_path):
+    def fetch_variants(self):
         """
         Fetches the variants from the 1000 genomes VCF files and loads them into a variant_list
 
@@ -60,12 +61,10 @@ class LOCAL_API:
             variant_list (list): a list of variants from the VCF file
         """
         variant_list = []
-        with open(file_path) as f:
-            data = json.load(f)
-        for var_range in data:
-            vcf_path = "../1000g/data/ALL.%s.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" % var_range['chr']
-            vcf_reader = vcf.Reader(open(vcf_path, 'r'))
-            variants = vcf_reader.fetch(str(var_range['chr']).replace('chr',''), int(var_range['start']), int(var_range['end']))
+        for var_range in self.config['variant_ranges']:
+            vcf_path = self.config['chr_paths'][str(var_range['chr'])]
+            vcf_reader = vcf.Reader(open(str(vcf_path), 'r'))
+            variants = vcf_reader.fetch(int(var_range['chr']), int(var_range['start']), int(var_range['end']))
             variant_list.extend([variant for variant in variants])
         return variant_list
 
@@ -132,7 +131,7 @@ class LOCAL_API:
         """
         Reads the usermappings from a file and updates the variables in the class
         """
-        with open('user_map.ped') as file:
+        with open(self.config['user_mapping_path']) as file:
             next(file)
             for line in file:
                 split_line = line.split('\t')

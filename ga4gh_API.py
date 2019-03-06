@@ -73,10 +73,8 @@ class GA4GH_API:
         variant_list = []
         with open(file_path) as f:
             data = json.load(f)
-        for var_range in data:
-            # TODO: queries for the variants within the range here:
-            chrom = str(var_range['chr']).replace('chr', '')
-            variant_list.extend(self.query_variants(chrom, str(var_range['start']), str(var_range['end'])))
+        for var_range in data['variant_ranges']:
+            variant_list.extend(self.query_variants(str(var_range['chr']), str(var_range['start']), str(var_range['end'])))
         return variant_list
 
     def query_variants(self, chrom, start, end):
