@@ -62,34 +62,6 @@ class ID3:
             if value != 0 : entropy -= (math.log(probability, 2) * probability)
         return entropy
 
-    @staticmethod
-    def create_split_path(split_path, new_variant_name):
-        """
-        Creates two new split paths given the variant name and the split path
-
-        Args:
-            split_paths (list1, list2): 
-                This is the paths of the splits before the current split. The first list
-                is the list of variant names and the second list is the direction
-                of the split. The direction of the second list is depicted by 1's
-                and 0's. Where 1 is splitting in the direction with the variant
-                and 0 is splitting in the direction without the variant. 
-            new_variant_name (str): unique id of variant
-
-        Returns:
-            w_split_path: The split path with the variant
-            wo_split_path: The split path without the variant
-
-        """
-        w_split_path = (list(split_path[0]), list(split_path[1]))
-        wo_split_path = (list(split_path[0]), list(split_path[1]))
-        w_split_path[0].append(new_variant_name)
-        wo_split_path[0].append(new_variant_name)
-        w_split_path[1].append(1)
-        wo_split_path[1].append(0)
-
-        return w_split_path, wo_split_path
-
     def predict(self, include_variants):
         """
         Traverses the tree and finds the leaf node corresponding to the list of included variants
@@ -108,9 +80,11 @@ class ID3:
                 # walk in in the path with the variant
                 if child_node.variant_name in include_variants and child_node.with_variant:
                     node = child_node
+                    break
                 # walk in the path without the variant
                 elif not child_node.variant_name in include_variants and not child_node.with_variant:
                     node = child_node
+                    break
 
         return node
 
@@ -121,7 +95,7 @@ class ID3:
 
         Args:
             subset (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -157,7 +131,7 @@ class ID3:
 
         Args:
             subset (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -202,7 +176,7 @@ class ID3:
 
         Args:
             node (Node): A node object from the anytree library
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -221,7 +195,7 @@ class ID3:
 
             w_subset, wo_subset = self.api.split_subset(node, var_name)
 
-            w_split_path, wo_split_path = ID3.create_split_path(node.split_path, var_name)
+            w_split_path, wo_split_path = self.api.create_split_path(node.split_path, var_name)
 
 
             if sum(w_subset.values()) > 0:
@@ -230,7 +204,7 @@ class ID3:
                 self.ID3(ID3_Node(var_name, dict(wo_subset), with_variant=False, split_path=wo_split_path, parent=node))
 
 if __name__ == "__main__":
-    id3_alg = ID3('test_variant_ranges.json', local=True)
+    id3_alg = ID3('test_variant_ranges.json', local=False)
     print id3_alg.api.variant_name_list
     id3_alg.print_tree('udo1')
     #print id3_alg.api.ancestry_list

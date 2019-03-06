@@ -69,6 +69,34 @@ class LOCAL_API:
             variant_list.extend([variant for variant in variants])
         return variant_list
 
+    @staticmethod
+    def create_split_path(split_path, new_variant_name):
+        """
+        Creates two new split paths given the variant name and the split path
+
+        Args:
+            split_path (list1, list2): 
+                This is the paths of the splits before the current split. The first list
+                is the list of variant names and the second list is the direction
+                of the split. The direction of the second list is depicted by 1's
+                and 0's. Where 1 is splitting in the direction with the variant
+                and 0 is splitting in the direction without the variant. 
+            new_variant_name (str): unique id of variant
+
+        Returns:
+            w_split_path: The split path with the variant
+            wo_split_path: The split path without the variant
+
+        """
+        w_split_path = (list(split_path[0]), list(split_path[1]))
+        wo_split_path = (list(split_path[0]), list(split_path[1]))
+        w_split_path[0].append(new_variant_name)
+        wo_split_path[0].append(new_variant_name)
+        w_split_path[1].append(1)
+        wo_split_path[1].append(0)
+
+        return w_split_path, wo_split_path
+
     def create_variant_dict(self, variants):
         """
         Creates a ditionary of variants from a vcf file which is used to update variables
@@ -129,14 +157,14 @@ class LOCAL_API:
             self.popu_list = self.popu_list[::2]
 
 
-    def find_ignore_rows(self, split_paths):
+    def find_ignore_rows(self, split_path):
         """
         Find rows in the variant_list to ignore. This function
         is mainly used to filter the variant_list so "queries" can
         be made
 
         Args:
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -150,7 +178,7 @@ class LOCAL_API:
         ignore_rows_idxs = []
 
         # basically find rows to ignore because it has been split upon already
-        for exc_var, direction in zip(split_paths[0], split_paths[1]):
+        for exc_var, direction in zip(split_path[0], split_path[1]):
             # finding rows to ignore
             var_idx = self.variant_name_list.index(exc_var)
             # looping through all the people
@@ -168,7 +196,7 @@ class LOCAL_API:
         variable to split on.
 
         Attributes:
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -182,14 +210,14 @@ class LOCAL_API:
             
 
         """
-        split_paths = node.split_paths
+        split_path = node.split_path
         # retrieves variant from "API"
         ancestry_list = self.ancestry_list
 
         w_variant_dict = dict.fromkeys(ancestry_list, 0)
         wo_variant_dict = dict.fromkeys(ancestry_list, 0)
 
-        ignore_rows_idxs = self.find_ignore_rows(split_paths)
+        ignore_rows_idxs = self.find_ignore_rows(split_path)
 
         # create new subset after finding all the rows to ignore
         for idx, variants in enumerate(self.variant_list):
@@ -206,13 +234,13 @@ class LOCAL_API:
 
         return w_variant_dict, wo_variant_dict
 
-    def find_next_variant_counts(self, split_paths):
+    def find_next_variant_counts(self, split_path):
         """
         Finds the counts of the a potential next variant to perform the
         split on
 
         Attributes:
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -230,7 +258,7 @@ class LOCAL_API:
         """
         ancestry_list = self.ancestry_list
         w_variant_list = [dict.fromkeys(ancestry_list, 0) for variant_names in self.variant_name_list]
-        ignore_rows_idxs = self.find_ignore_rows(split_paths)
+        ignore_rows_idxs = self.find_ignore_rows(split_path)
 
         for idx, variants in enumerate(self.variant_list):
             if idx in ignore_rows_idxs:

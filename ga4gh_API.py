@@ -26,7 +26,7 @@ class GA4GH_API:
             * Add option to query for different variants rather than grabbing a predefined set of variants
         """
         self.dataset_id = 'WyIxa2dlbm9tZSJd'
-        self.variant_set_ids = GA4GH_API.get_variant_set_ids(self.dataset_id)[::10]
+        self.variant_set_ids = GA4GH_API.get_variant_set_ids(self.dataset_id)[::2]
         self.variant_name_list = self.fetch_variants(file_path)
         self.is_conf_matrix = conf_matrix
         self.ancestry_list = []
@@ -40,6 +40,34 @@ class GA4GH_API:
         r = requests.post('%s%s' %  (GA4GH_API.host_url, 'variantsets/search'), json=req_body).json()
         variant_set_ids = [ variantset['id'] for variantset in r['results']['variantSets'] ]
         return variant_set_ids
+
+    @staticmethod
+    def create_split_path(split_path, new_variant_name):
+        """
+        Creates two new split paths given the variant name and the split path
+
+        Args:
+            split_path (list1, list2): 
+                This is the paths of the splits before the current split. The first list
+                is the list of variant names and the second list is the direction
+                of the split. The direction of the second list is depicted by 1's
+                and 0's. Where 1 is splitting in the direction with the variant
+                and 0 is splitting in the direction without the variant. 
+            new_variant_name (str): unique id of variant
+
+        Returns:
+            w_split_path: The split path with the variant
+            wo_split_path: The split path without the variant
+
+        """
+        w_split_path = (list(split_path[0]), list(split_path[1]))
+        wo_split_path = (list(split_path[0]), list(split_path[1]))
+        w_split_path[0].append(new_variant_name)
+        wo_split_path[0].append(new_variant_name)
+        w_split_path[1].append(1)
+        wo_split_path[1].append(0)
+
+        return w_split_path, wo_split_path
 
     def fetch_variants(self, file_path):
         variant_list = []
@@ -67,7 +95,7 @@ class GA4GH_API:
         """
         variant_list = []
         req_body = {
-            'variantSetIds' : self.variant_set_ids[:1],
+            'variantSetIds' : self.variant_set_ids,
             'start': start,
             'end': end,
             'referenceName': chrom
@@ -78,14 +106,14 @@ class GA4GH_API:
         return variant_list
 
 
-    def craft_api_request(self, split_paths=([], [])):
+    def craft_api_request(self, split_path=([], [])):
         """
         Crafts an GA4GH_API body to be sent to the ga4gh server which is intended to filter
         the counts of the variants based on the inclusion or exclusion of particular
         variants
 
         Attributes:
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                     This is the paths of the splits before the current split. The first list
                     is the list of variant names and the second list is the direction
                     of the split. The direction of the second list is depicted by 1's
@@ -95,8 +123,6 @@ class GA4GH_API:
 
         Returns:
             req_body (json): Returns a JSON containing the request body
-        TODO:
-            * Add NAND logic for filtering without a particular variant
         """
         components = []
         logic = { 'and': 
@@ -106,6 +132,7 @@ class GA4GH_API:
             ] 
         }
         id_list = []
+
         # Add to OR list
         for variant_id in self.variant_name_list:
             id_list.append( { 'id': variant_id } )
@@ -122,24 +149,17 @@ class GA4GH_API:
                 })
         logic['and'][0]['or'].extend(id_list)
 
-        for variant, direction in zip(split_paths[0], split_paths[1]):
-            # remove from OR
-            logic['and'][0]['or'] = [ variant_id for variant_id in logic['and'][0]['or'] if variant != variant_id['id']]
-            if not direction:
-                continue
-            # add to AND
-            logic['and'][1]['and'].append({"id": variant})
+        for variant, direction in zip(split_path[0], split_path[1]):
+            if direction:
+                logic['and'][1]['and'].append({"id": variant})
+            else:
+                logic['and'][1]['and'].append({"id": variant, "negate": True})
 
         # Finds index with empty list and removes it
-        i = None
-        for idx, val in enumerate(logic['and']):
-            key = val.keys()[0]
-            if val[key] == []:
-                i = idx
-                break
-        if i: 
-            del logic['and'][i]
+        if logic['and'][1]['and'] == []:
+            del logic['and'][1]
 
+        # puts the request together into a form digestable by the API
         req_body = {}
         req_body['logic'] = logic
         req_body['components'] = components
@@ -173,7 +193,7 @@ class GA4GH_API:
         variable to split on.
 
         Attributes:
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -186,37 +206,36 @@ class GA4GH_API:
             wo_variant_dict (dict): The split subset that does not include the variant
 
         """
-        wo_variant_split_path = list(node.split_path)
-        wo_variant_split_path.append((split_var, 0))
-        w_variant_split_path = list(node.split_path)
-        w_variant_split_path.append((split_var, 1))
+        w_variant_split_path, wo_variant_split_path = GA4GH_API.create_split_path(node.split_path, split_var)
 
         w_var_req_body = self.craft_api_request(w_variant_split_path)
         wo_var_req_body = self.craft_api_request(wo_variant_split_path)
 
         # make query here for
         r_w_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=w_var_req_body).json()['results']['patients'][0]['ethnicity']
-        r_wo_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=w_var_req_body).json()['results']['patients'][0]['ethnicity']
+        r_wo_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=wo_var_req_body).json()['results']['patients'][0]['ethnicity']
 
+        print(node.subset)
         print("performed split")
+        print("")
         print(r_w_var)
-        print(w_var_req_body)
-
+        print(w_var_req_body['logic'])
+        print("")
         print(r_wo_var)
-        print(wo_var_req_body)
+        print(wo_var_req_body['logic'])
         print("")
 
         return r_w_var, r_wo_var
 
         # For w_variant list
 
-    def find_next_variant_counts(self, split_paths):
+    def find_next_variant_counts(self, split_path):
         """
         Finds the counts of the a potential next variant to perform the
         split on
 
         Attributes:
-            split_paths (list1, list2): 
+            split_path (list1, list2): 
                 This is the paths of the splits before the current split. The first list
                 is the list of variant names and the second list is the direction
                 of the split. The direction of the second list is depicted by 1's
@@ -233,25 +252,26 @@ class GA4GH_API:
                 ]
         """
         w_variant_list = []
-        exclude_variants = [ variant for variant in split_paths[0] ]
-        include_variants = list(self.variant_name_list)
 
-        for var in exclude_variants:
-            include_variants.remove(var)
+        for var in self.variant_name_list:
+            if var in split_path[0]:
+                w_variant_list.append({})
+                continue
 
-        for var in include_variants:
-            split_paths[0].append(var)
-            split_paths[1].append(1)
+            split_path[0].append(var)
+            split_path[1].append(1)
 
-            req_body = self.craft_api_request(split_paths)
+            req_body = self.craft_api_request(split_path)
             resp = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=req_body).json()
-            variant_counts = resp['results']['patients'][0]['ethnicity']
-
+            variant_counts = resp['results']['patients'][0]['ethnicity'] if 'ethnicity' in resp['results']['patients'][0] else {}
             w_variant_list.append(variant_counts)
 
-            del split_paths[0][-1]
-            del split_paths[1][-1]
+            del split_path[0][-1]
+            del split_path[1][-1]
 
+        print("w/ var list")
+        print(w_variant_list)
+        print("")
         return w_variant_list
 
 
