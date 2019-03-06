@@ -12,6 +12,8 @@
          "end": 50122365
       }
    ],
+   "ga4gh_server_url": "http://localhost:8000/",
+   "ga4gh_server_dataset_id": "WyIxa2dlbm9tZSJd",
    "user_mapping_path": "release/integrated_call_samples_v2.20130502.ALL.ped",
    "chr_paths": {
         "1": "release/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",

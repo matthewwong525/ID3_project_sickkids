@@ -2,8 +2,7 @@ import json
 import requests
 
 class GA4GH_API:
-    host_url = 'http://localhost:8000/'
-    def __init__(self, file_path, conf_matrix=False):
+    def __init__(self, file_path):
         """
         Initializes the GA4GH_API class
 
@@ -13,9 +12,12 @@ class GA4GH_API:
 
         Args:
             file_path (str): Path to json file that contains the variant ranges
-            conf_matrix (bool): Initializes API to perform conf_matrix operations
 
         Attributes:
+            config (json): loaded config file
+            host_url (str): url pointing to ga4gh_server
+            dataset_id (str): dataset id of the ga4gh_server that is to b accessed
+            variant_set_ids (list): List of variantsets within the specified dataset
             variant_name_list (list): Names of the variants in the format of
                                           "VARIANT_POS,VARIANT_REF,VARIANT_ALT"
                                           "CHROMOSOME_#:START_POS:END_POS" (TODO - UPDATE TO THIS)
@@ -25,21 +27,16 @@ class GA4GH_API:
         TODO:
             * Add option to query for different variants rather than grabbing a predefined set of variants
         """
-        self.dataset_id = 'WyIxa2dlbm9tZSJd'
-        self.variant_set_ids = GA4GH_API.get_variant_set_ids(self.dataset_id)[::2]
+        with open(file_path) as f:
+            self.config = json.load(f)
+        self.host_url = self.config['ga4gh_server_url']
+        self.dataset_id = self.config['ga4gh_server_dataset_id']
+        self.variant_set_ids = self.get_variant_set_ids(self.dataset_id)[::2]
         self.variant_name_list = self.fetch_variants(file_path)
-        self.is_conf_matrix = conf_matrix
         self.ancestry_list = []
 
         # updates variables
         #self.read_user_mappings(variant_dict)
-
-    @staticmethod
-    def get_variant_set_ids(dataset_id):
-        req_body = { "dataset_id": dataset_id }
-        r = requests.post('%s%s' %  (GA4GH_API.host_url, 'variantsets/search'), json=req_body).json()
-        variant_set_ids = [ variantset['id'] for variantset in r['results']['variantSets'] ]
-        return variant_set_ids
 
     @staticmethod
     def create_split_path(split_path, new_variant_name):
@@ -69,11 +66,15 @@ class GA4GH_API:
 
         return w_split_path, wo_split_path
 
+    def get_variant_set_ids(self, dataset_id):
+        req_body = { "dataset_id": dataset_id }
+        r = requests.post('%s%s' %  (self.host_url, 'variantsets/search'), json=req_body).json()
+        variant_set_ids = [ variantset['id'] for variantset in r['results']['variantSets'] ]
+        return variant_set_ids
+
     def fetch_variants(self, file_path):
         variant_list = []
-        with open(file_path) as f:
-            data = json.load(f)
-        for var_range in data['variant_ranges']:
+        for var_range in self.config['variant_ranges']:
             variant_list.extend(self.query_variants(str(var_range['chr']), str(var_range['start']), str(var_range['end'])))
         return variant_list
 
@@ -98,7 +99,7 @@ class GA4GH_API:
             'end': end,
             'referenceName': chrom
         }
-        r = requests.post('%s%s' %  (GA4GH_API.host_url, 'variants/search'), json=req_body).json()
+        r = requests.post('%s%s' %  (self.host_url, 'variants/search'), json=req_body).json()
         for variant in r['results']['variants']:
             variant_list.append(':'.join([chrom, variant['start'], variant['end']]))
         return variant_list
@@ -179,7 +180,7 @@ class GA4GH_API:
             counts (dict): A dictionary containing keys of ancestries and values of the counts for the particular ancestry
         """
         req =  self.craft_api_request()
-        ancestry_counts = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=req).json()['results']['patients'][0]['ethnicity']
+        ancestry_counts = requests.post('%s%s' %  (self.host_url, 'count'), json=req).json()['results']['patients'][0]['ethnicity']
         if self.ancestry_list == []:
             self.ancestry_list = ancestry_counts.keys()
 
@@ -210,22 +211,11 @@ class GA4GH_API:
         wo_var_req_body = self.craft_api_request(wo_variant_split_path)
 
         # make query here for
-        r_w_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=w_var_req_body).json()['results']['patients'][0]['ethnicity']
-        r_wo_var = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=wo_var_req_body).json()['results']['patients'][0]['ethnicity']
-
-        print(node.subset)
-        print("performed split")
-        print("")
-        print(r_w_var)
-        print(w_var_req_body['logic'])
-        print("")
-        print(r_wo_var)
-        print(wo_var_req_body['logic'])
-        print("")
+        r_w_var = requests.post('%s%s' %  (self.host_url, 'count'), json=w_var_req_body).json()['results']['patients'][0]['ethnicity']
+        r_wo_var = requests.post('%s%s' %  (self.host_url, 'count'), json=wo_var_req_body).json()['results']['patients'][0]['ethnicity']
 
         return r_w_var, r_wo_var
 
-        # For w_variant list
 
     def find_next_variant_counts(self, split_path):
         """
@@ -260,16 +250,12 @@ class GA4GH_API:
             split_path[1].append(1)
 
             req_body = self.craft_api_request(split_path)
-            resp = requests.post('%s%s' %  (GA4GH_API.host_url, 'count'), json=req_body).json()
+            resp = requests.post('%s%s' %  (self.host_url, 'count'), json=req_body).json()
             variant_counts = resp['results']['patients'][0]['ethnicity'] if 'ethnicity' in resp['results']['patients'][0] else {}
             w_variant_list.append(variant_counts)
 
             del split_path[0][-1]
             del split_path[1][-1]
-
-        print("w/ var list")
-        print(w_variant_list)
-        print("")
         return w_variant_list
 
 
