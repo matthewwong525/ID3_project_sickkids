@@ -13,11 +13,12 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 
 What things you need to install the software and how to install them:
-
+```
 python3/pip (https://www.python.org/downloads/)
 virtualenv (https://virtualenv.pypa.io/en/stable/installation/)
 git (https://git-scm.com/)
 ga4gh-server (https://github.com/CanDIG/ga4gh-server)
+```
 
 ### Installing
 
@@ -46,6 +47,13 @@ or run the following commands below
 ```
 wget -m ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ -nd -P release -l 1
 ```
+4. Test if everything works!
+
+Run script below to see if everything works!
+
+```
+python main.py
+```
 
 End with an example of getting some data out of the system or using it for a little demo
 
@@ -53,11 +61,13 @@ End with an example of getting some data out of the system or using it for a lit
 
 `config.json` has been already set up so you can run the classifier without any changes to this file. If you want to make some changes to your query, you can simply change some values within this file. Below are the explanations of the attributes within this file.
 
+```
 `variant_ranges` : The ranges of variants you want to inspect in the ID3 classifier. A variant range can contain more than one variant.
 `ga4gh_server_url` : The url that points to the ga4gh_server
 `ga4gh_server_dataset_id` : The id of the dataset you want to query from. It is associated with the ga4gh_server
 `user_mapping_path` : Path to the `.ped` file that maps individual ids to ancestries
 `chr_paths` : Path to the `.vcf` chromosome files from the 1000 genomes project
+```
 
 ## Examples
 
@@ -89,6 +99,8 @@ id3_obj.predict(['22:50121766:50121767'])
 Confusion Matrix object extends the ID3 object, so you can use functions like `predict`. The Confusion matrix is used to describe performance of the model.
 
 ```
+from ConfusionMatrix import ConfusionMatrix
+
 # Creates ConfusionMatrix object
 c = ConfusionMatrix()
 
