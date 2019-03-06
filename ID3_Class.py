@@ -19,6 +19,9 @@ class ID3:
         Attributes:
             api (API): API object that is used to interact with the virtual API
             root_node (Node): Creates the root node of the tree to be added upon
+
+        TODO:
+            * Add logging so user can know if the classifier is working
         """
         
         self.api = LOCAL_API(file_path) if local else GA4GH_API(file_path)
@@ -188,6 +191,7 @@ class ID3:
 
         """
         # find the attrivute to split on and adds that variant to exclude variant list
+        print("Created Node")
         subset = node.subset
         split_index = self.find_variant_split(subset, node.split_path)
         if not self.is_leaf_node(subset, node.split_path, split_index):
@@ -204,7 +208,7 @@ class ID3:
                 self.ID3(ID3_Node(var_name, dict(wo_subset), with_variant=False, split_path=wo_split_path, parent=node))
 
 if __name__ == "__main__":
-    id3_alg = ID3('config.json', local=False)
+    id3_alg = ID3('config.json', local=True)
     print id3_alg.api.variant_name_list
     id3_alg.print_tree('udo1')
     #print id3_alg.api.ancestry_list

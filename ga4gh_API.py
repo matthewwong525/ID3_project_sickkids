@@ -25,12 +25,15 @@ class GA4GH_API:
             is_conf_matrix (bool): tells API to initialize the API for confusion matrix operations
 
         TODO:
-            * Add option to query for different variants rather than grabbing a predefined set of variants
+            * Fix variant_set_ids
+            * Throw error when server gives incorrect response
         """
         with open(file_path) as f:
             self.config = json.load(f)
         self.host_url = self.config['ga4gh_server_url']
         self.dataset_id = self.config['ga4gh_server_dataset_id']
+        # SPLIT VARIANT_SET_IDS IN HALF - THIS IS DONE TO NOT CRASH THE GA4GH SERVER
+        # TODO: FIX THIS
         self.variant_set_ids = self.get_variant_set_ids(self.dataset_id)[::2]
         self.variant_name_list = self.fetch_variants(file_path)
         self.ancestry_list = []

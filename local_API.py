@@ -116,7 +116,7 @@ class LOCAL_API:
         # loops through variants
         for variant in variants:
             idx += 1
-            self.variant_name_list.append(','.join([str(variant.POS), str(variant.REF), str(variant.ALT)]))
+            self.variant_name_list.append(':'.join([str(variant.CHROM), str(variant.POS-1), str(variant.POS)]))
             # loops through people in variants
             for call in variant.samples:
                 variant_dict[call.sample] = variant_dict.get(call.sample, [])
