@@ -14,7 +14,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 What things you need to install the software and how to install them:
 ```
-python3/pip (https://www.python.org/downloads/)
+python2/pip (https://www.python.org/downloads/)
 virtualenv (https://virtualenv.pypa.io/en/stable/installation/)
 git (https://git-scm.com/)
 ga4gh-server (https://github.com/CanDIG/ga4gh-server)
