@@ -1,7 +1,7 @@
 from ID3_Class import ID3
 
 # Creates ID3 object with a filepath to the config.json
-id3_obj = ID3('config.json', local=True)
+id3_obj = ID3('config.json', local=False)
 
 # prints the ID3 tree as `tree.png`
 id3_obj.print_tree('tree')

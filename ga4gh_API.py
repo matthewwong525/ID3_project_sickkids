@@ -17,7 +17,6 @@ class GA4GH_API:
             config (json): loaded config file
             host_url (str): url pointing to ga4gh_server
             dataset_id (str): dataset id of the ga4gh_server that is to b accessed
-            variant_set_ids (list): List of variantsets within the specified dataset
             variant_name_list (list): Names of the variants in the format of
                                           "VARIANT_POS,VARIANT_REF,VARIANT_ALT"
                                           "CHROMOSOME_#:START_POS:END_POS" (TODO - UPDATE TO THIS)
@@ -25,16 +24,12 @@ class GA4GH_API:
             is_conf_matrix (bool): tells API to initialize the API for confusion matrix operations
 
         TODO:
-            * Fix variant_set_ids
             * Throw error when server gives incorrect response
         """
         with open(file_path) as f:
             self.config = json.load(f)
         self.host_url = self.config['ga4gh_server_url']
         self.dataset_id = self.config['ga4gh_server_dataset_id']
-        # SPLIT VARIANT_SET_IDS IN HALF - THIS IS DONE TO NOT CRASH THE GA4GH SERVER
-        # TODO: FIX THIS
-        self.variant_set_ids = self.get_variant_set_ids(self.dataset_id)[::2]
         self.variant_name_list = self.fetch_variants(file_path)
         self.ancestry_list = []
 
@@ -69,12 +64,6 @@ class GA4GH_API:
 
         return w_split_path, wo_split_path
 
-    def get_variant_set_ids(self, dataset_id):
-        req_body = { "dataset_id": dataset_id }
-        r = requests.post('%s%s' %  (self.host_url, 'variantsets/search'), json=req_body).json()
-        variant_set_ids = [ variantset['id'] for variantset in r['results']['variantSets'] ]
-        return variant_set_ids
-
     def fetch_variants(self, file_path):
         variant_list = []
         for var_range in self.config['variant_ranges']:
@@ -97,7 +86,7 @@ class GA4GH_API:
         """
         variant_list = []
         req_body = {
-            'variantSetIds' : self.variant_set_ids,
+            'datasetId' : self.dataset_id,
             'start': start,
             'end': end,
             'referenceName': chrom
@@ -146,7 +135,6 @@ class GA4GH_API:
                         "start": START,
                         "end": END,
                         "referenceName": CHR,
-                        "variant_set_ids": self.variant_set_ids
                     }
                 })
         logic['and'][0]['or'].extend(id_list)
@@ -168,7 +156,7 @@ class GA4GH_API:
         req_body['dataset_id'] = self.dataset_id
         req_body['results'] = [ {
                     "table": "patients",
-                    "field": [
+                    "fields": [
                         "ethnicity"
                     ]
                 } ]

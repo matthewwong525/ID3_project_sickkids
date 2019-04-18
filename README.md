@@ -20,7 +20,7 @@ git (https://git-scm.com/)
 ga4gh-server (https://github.com/CanDIG/ga4gh-server)
 ```
 
-### Installing
+### Installing ID3
 
 A step by step series of examples that tell you how to get a development env running
 
@@ -67,6 +67,69 @@ End with an example of getting some data out of the system or using it for a lit
 `ga4gh_server_dataset_id` : The id of the dataset you want to query from. It is associated with the ga4gh_server
 `user_mapping_path` : Path to the `.ped` file that maps individual ids to ancestries
 `chr_paths` : Path to the `.vcf` chromosome files from the 1000 genomes project
+```
+
+### Installing and Starting candig_server
+
+Additionally, you can host the ga4gh_server locally if you want to test the capabilities
+
+```
+# install OS packages
+
+## for Ubuntu/Debian
+sudo apt-get install python-dev python-virtualenv zlib1g-dev libxslt1-dev libffi-dev libssl-dev
+export LIBRARY_SEARCH_PATHS=$LIBRARY_SEARCH_PATHS:/usr/local/opt/openssl/lib/
+
+## for Fedora 22+ (current)
+sudo dnf install python-devel python-virtualenv zlib-devel libxslt-devel openssl-devel
+
+# setup env
+cd ga4gh_server
+virtualenv test_server
+cd test_server
+source bin/activate
+
+# install packages
+pip install -U git+https://github.com/CanDIG/candig-schemas.git@develop#egg=ga4gh_schemas
+pip install -U git+https://github.com/CanDIG/candig-client.git@authz#egg=ga4gh_client
+pip install -U git+https://github.com/CanDIG/candig-server.git@master#egg=candig_server
+pip install -U git+https://github.com/CanDIG/candig-ingest@master#egg=candig_ingest
+pip install -U git+https://github.com/CanDIG/PROFYLE_ingest.git@develop#egg=PROFYLE_ingest
+
+# setup initial peers
+mkdir -p ga4gh/server/templates
+touch ga4gh/server/templates/initial_peers.txt
+
+# ingest data and make the repo
+mkdir ga4gh-example-data
+cd ga4gh-example-data
+
+# init db
+ga4gh_repo init registry.db
+
+# create dataset
+ga4gh_repo add-dataset registry.db 1kgenome \
+    --description "Variants from the 1000 Genomes project and GENCODE genes annotations"
+
+# ingest patient metadata
+PROFYLE_ingest registry.db 1kgenome ../../1kgenome_metadata.json
+
+# add reference set
+cd ../..
+wget ftp://ftp.1000genomes.ebi.ac.uk//vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
+cd test_server/ga4gh-example-data
+
+ga4gh_repo add-referenceset registry.db ../../hs37d5.fa.gz \
+  -d "NCBI37 assembly of the human genome" --name GRCh37-lite \
+  --sourceUri "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz"
+
+# add variant sets (100 variantsets to ingest)
+bash ../../1kgenome_ingest.sh
+
+# launch server
+cd ..
+ga4gh_server --host 127.0.0.1 --port 8000 -c NoAuth
+
 ```
 
 ## Examples
