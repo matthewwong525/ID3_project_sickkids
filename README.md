@@ -69,7 +69,7 @@ End with an example of getting some data out of the system or using it for a lit
 `chr_paths` : Path to the `.vcf` chromosome files from the 1000 genomes project
 ```
 
-### Installing and Starting candig_server
+### Installing and starting ga4gh_server
 
 Additionally, you can host the ga4gh_server locally if you want to test the capabilities
 
